@@ -114,11 +114,18 @@ if suite:
         friendly_label = parameter_dictionary.get(clean_key, str(feat).replace('_', ' ').title())
         
         # Strip long one-hot encoded hashes if they show up in genetic strings
-        if len(friendly_label) > 60:
-            friendly_label = friendly_label[:57] + "..."
-            
-        val = col_slot.number_input(f"{friendly_label}", value=0.0, step=0.01, format="%.4f")
-        input_values.append(val)
+friendly_label = parameter_dictionary.get(clean_key, str(feat).replace('_', ' ').title())
+
+if len(friendly_label) > 60:
+    friendly_label = friendly_label[:57] + "..."
+
+if "PRNP" in selected_display:
+    choice = col_slot.selectbox(f"{friendly_label}", ["0 - Mutation Absent (Normal)", "1 - Mutation Present (Variant)"], index=0)
+    val = 1.0 if "1 -" in choice else 0.0
+else:
+    val = col_slot.number_input(f"{friendly_label}", value=0.0, step=0.01, format="%.4f")
+
+input_values.append(val)
         
     # Append padding zeros for any remaining complex network nodes
     for feat in features[display_limit:]:
