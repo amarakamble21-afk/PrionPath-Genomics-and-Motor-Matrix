@@ -13,7 +13,6 @@ st.markdown("---")
 st.sidebar.header("Clinical Navigation Control")
 
 # --- MASTER TRANSLATION MAP ---
-# This ensures that no matter how the keys look in the file, we parse them cleanly
 parameter_dictionary = {
     # Objectives / Targets
     'vcv000013401': 'Genetic Variation Pathology Risk Index',
@@ -38,7 +37,6 @@ parameter_dictionary = {
 @st.cache_resource
 def load_suite():
     try:
-        # Load the existing database file
         return joblib.load('prion_clinical_suite(2).pkl')
     except:
         try:
@@ -50,10 +48,8 @@ def load_suite():
 suite = load_suite()
 
 if suite:
-    # 1. STANDARDIZE KEYS FOR BIMODAL INTERFACE
     raw_keys = list(suite.keys())
     
-    # Filter the models strictly to our two target domains based on partial name matching
     pnrp_key = [k for k in raw_keys if 'prnp' in k.lower() or 'variant' in k.lower()]
     motor_key = [k for k in raw_keys if 'data.csv' in k.lower()]
     
@@ -63,23 +59,20 @@ if suite:
     if motor_key:
         available_modules['Motor Function & Clinical Severity Evaluation Matrix'] = motor_key[0]
         
-    # 2. RENDER THE INTERACTIVE MODULE SELECTION
     selected_display = st.sidebar.selectbox("Choose Disease or Lab Analysis Type", list(available_modules.keys()))
     internal_file_key = available_modules[selected_display]
     
-    # Load specific network properties safely
     model_data = suite[internal_file_key]
     features = model_data['features']
     target = model_data['target']
     mae = model_data['mae']
     
-    # 3. RENDER TEXT DESCRIPTIONS
     st.subheader(selected_display)
     if "PRNP" in selected_display:
         st.write(
             "This diagnostic network evaluates verified human PRNP gene variations and genomic profiles. "
             "It computes multi-parameter non-linear risk projections to determine relative pathogenicity "
-            "bounds mapped to structural structural mutations."
+            "bounds mapped to structural mutations."
         )
     else:
         st.write(
@@ -90,7 +83,6 @@ if suite:
         
     st.markdown("---")
     
-    # 4. STATISTICAL MATRIX DASHBOARD
     friendly_target = parameter_dictionary.get(str(target).lower(), str(target).upper().replace('_', ' '))
     
     col1, col2, col3 = st.columns(3)
@@ -101,7 +93,6 @@ if suite:
     st.markdown("### Clinical Parameter & Feature Settings")
     st.write("Modify the functional metrics below to evaluate real-time architectural estimations:")
     
-    # 5. DYNAMIC FEATURE RENDERER
     input_values = []
     display_limit = min(12, len(features))
     grid_cols = st.columns(2)
@@ -109,31 +100,25 @@ if suite:
     for idx, feat in enumerate(features[:display_limit]):
         col_slot = grid_cols[idx % 2]
         
-        # Clean technical shorthand labels out dynamically
         clean_key = str(feat).lower().strip()
         friendly_label = parameter_dictionary.get(clean_key, str(feat).replace('_', ' ').title())
         
-        # Strip long one-hot encoded hashes if they show up in genetic strings
-friendly_label = parameter_dictionary.get(clean_key, str(feat).replace('_', ' ').title())
-
-if len(friendly_label) > 60:
-    friendly_label = friendly_label[:57] + "..."
-
-if "PRNP" in selected_display:
-    choice = col_slot.selectbox(f"{friendly_label}", ["0 - Mutation Absent (Normal)", "1 - Mutation Present (Variant)"], index=0)
-    val = 1.0 if "1 -" in choice else 0.0
-else:
-    val = col_slot.number_input(f"{friendly_label}", value=0.0, step=0.01, format="%.4f")
-
-input_values.append(val)
+        if len(friendly_label) > 60:
+            friendly_label = friendly_label[:57] + "..."
+            
+        if "PRNP" in selected_display:
+            choice = col_slot.selectbox(f"{friendly_label}", ["0 - Mutation Absent (Normal)", "1 - Mutation Present (Variant)"], index=0)
+            val = 1.0 if "1 -" in choice else 0.0
+        else:
+            val = col_slot.number_input(f"{friendly_label}", value=0.0, step=0.01, format="%.4f")
+            
+        input_values.append(val)
         
-    # Append padding zeros for any remaining complex network nodes
     for feat in features[display_limit:]:
         input_values.append(0.0)
         
     st.markdown("---")
     
-    # 6. COMPUTE INFERENCE DIAGNOSTICS
     if st.button("Compute Diagnostic Projection", type="primary"):
         input_array = np.array([input_values])
         prediction = model_data['model'].predict(input_array)
