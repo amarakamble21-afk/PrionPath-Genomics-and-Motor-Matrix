@@ -121,9 +121,13 @@ if suite:
     
     if st.button("Compute Diagnostic Projection", type="primary"):
         input_array = np.array([input_values])
-        prediction = model_data['model'].predict(input_array)
+        prediction_raw = model_data['model'].predict(input_array)
         
-        st.success(f"### AI Predicted Outcome Value for [{friendly_target}]: **{prediction:.4f}**")
+        # FIXED: Extracting the actual scalar numeric element out of the numpy array block
+        prediction_scalar = float(prediction_raw[0])
+        
+        st.success(f"### AI Predicted Outcome Value for [{friendly_target}]: **{prediction_scalar:.4f}**")
         st.info(f"Cross-Validation Guidance Window: +/- {mae:.4f} deviation interval bounds.")
 else:
     st.warning("Failed to link model properties. Please check file integrity.")
+
