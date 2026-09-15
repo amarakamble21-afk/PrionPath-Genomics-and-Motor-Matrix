@@ -64,8 +64,9 @@ if suite:
         
     selected_display = st.sidebar.selectbox("Choose Disease or Lab Analysis Type", list(available_modules.keys()))
     
-    # FIXED: Extracting the actual first string element out of the matching dictionary list structure safely
-    internal_file_key = available_modules[selected_display][0]
+    # Extract the matching key from the array safely
+    internal_file_keys = available_modules[selected_display]
+    internal_file_key = internal_file_keys[0] if isinstance(internal_file_keys, list) else internal_file_keys
     
     model_data = suite[internal_file_key]
     features = model_data['features']
@@ -207,5 +208,4 @@ Projections are mathematical approximations from research registries and are not
             file_name=f"Clinical_AI_Diagnostic_Report.txt",
             mime="text/plain"
         )
-else:
 
