@@ -66,7 +66,7 @@ if suite:
     
     # Extract the matching key from the array safely
     internal_file_keys = available_modules[selected_display]
-    internal_file_key = internal_file_keys[0] if isinstance(internal_file_keys, list) else internal_file_keys
+    internal_file_key = internal_file_keys if isinstance(internal_file_keys, list) else internal_file_keys
     
     model_data = suite[internal_file_key]
     features = model_data['features']
@@ -129,7 +129,12 @@ if suite:
     if st.button("Compute Diagnostic Projection", type="primary"):
         input_array = np.array([input_values])
         prediction_raw = model_data['model'].predict(input_array)
-        prediction_scalar = float(prediction_raw)
+        
+        # FIXED: Robust parsing mechanism that works across all dimension types
+        if hasattr(prediction_raw, "item"):
+            prediction_scalar = float(prediction_raw.item())
+        else:
+            prediction_scalar = float(np.array(prediction_raw).flatten())
         
         st.success(f"### AI Predicted Outcome Value for [{friendly_target}]: **{prediction_scalar:.4f}**")
         st.info(f"Cross-Validation Guidance Window: +/- {mae:.4f} deviation interval bounds.")
@@ -201,11 +206,4 @@ Projections are mathematical approximations from research registries and are not
         for lbl, val in zip(feature_labels, input_values[:display_limit]):
             report_text += f"- {lbl}: {val}\n"
         report_text += "======================================================\n"
-        
-        st.download_button(
-            label="Download Structured Clinical Summary Report",
-            data=report_text,
-            file_name=f"Clinical_AI_Diagnostic_Report.txt",
-            mime="text/plain"
-        )
 
