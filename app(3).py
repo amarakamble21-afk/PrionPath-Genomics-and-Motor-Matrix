@@ -1,209 +1,112 @@
-import streamlit as st
-import joblib
-import numpy as np
+import os
+import glob
 import pandas as pd
-from datetime import datetime
+import numpy as np
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, r2_score
+import joblib
 
-st.set_page_config(
-    page_title="Neurodegenerative Bimodal Clinical Diagnostics Engine",
-    layout="wide"
-)
+FOLDER_PATH = r"sample_data"
 
-# --- USER CREDIT SIGNATURE LINE ---
-st.sidebar.markdown("### Platform Signature")
-st.sidebar.info("Designed and Developed by Amara Ranjit Kamble")
-st.sidebar.markdown("---")
+print(f"Scanning the '{FOLDER_PATH}' folder for clinical neurodegenerative assets...")
 
-st.title("Neurodegenerative Bimodal Clinical Diagnostics Engine")
-st.markdown("##### Powered by Gradient Boosted Decision Tree (XGBoost) Architectures")
-st.markdown("---")
-st.sidebar.header("Clinical Navigation Control")
-
-# --- MASTER TRANSLATION MAP ---
-parameter_dictionary = {
-    'vcv000013401': 'Genetic Variation Pathology Risk Index',
-    'total_time25': 'Total Clinical Progression Score',
-    'air_time': 'Movement Interruption Duration (Air Time)',
-    'disp_index1': 'Spatial Displacement Variability Index',
-    'gmrt_in_air1': 'Geometric Mean Reaction Time (Air)',
-    'gmrt_on_paper1': 'Task Execution Motor Response Speed (Active)',
-    'max_x_extension1': 'Maximum Horizontal Extension Range',
-    'max_y_extension1': 'Maximum Vertical Extension Range',
-    'mean_acc_in_air1': 'Average Tremor Acceleration (Resting)',
-    'mean_acc_on_paper1': 'Average Active Movement Acceleration',
-    'mean_gmrt1': 'Unified Mean Response Coordinate Speed',
-    'mean_jerk_in_air1': 'Resting Tremor Incoordination (Mean Jerk in Air)',
-    'mean_jerk_on_paper1': 'Active Movement Shakiness (Mean Jerk on Paper)',
-    'mean_speed_in_air1': 'Resting Limb Movement Velocity',
-    'mean_speed_on_paper1': 'Active Writing/Drawing Velocity'
-}
-
-@st.cache_resource
-def load_suite():
-    try:
-        return joblib.load('prion_clinical_suite(2).pkl')
-    except:
+if not os.path.exists(FOLDER_PATH):
+    print(f"Warning: Directory missing. Please upload your CSVs to the left sidebar.")
+else:
+    all_csvs = glob.glob(os.path.join(FOLDER_PATH, "*.csv"))
+    model_suite = {}
+    
+    # Filter strictly to the PRNP and Motor Data CSV files
+    target_files = [f for f in all_csvs if "variants" in os.path.basename(f).lower() or "prnp" in os.path.basename(f).lower() or "data.csv" in os.path.basename(f).lower()]
+    
+    print(f"Isolating Bimodal datasets for training: {[os.path.basename(f) for f in target_files]}")
+    
+    for csv_file in target_files:
+        fname = os.path.basename(csv_file)
+        
+        print(f"\n==================================================")
+        print(f"PIPELINE INITIALIZED FOR: {fname}")
+        print(f"==================================================")
+        
         try:
-            return joblib.load('prion_clinical_suite.pkl')
-        except:
-            st.error("Could not locate the model database asset file. Please ensure it is uploaded.")
-            return None
-
-suite = load_suite()
-
-if suite:
-    raw_keys = list(suite.keys())
-    pnrp_key = [k for k in raw_keys if 'prnp' in k.lower() or 'variant' in k.lower()]
-    motor_key = [k for k in raw_keys if 'data.csv' in k.lower()]
-    
-    available_modules = {}
-    if pnrp_key:
-        available_modules['PRNP Genetic Mutation Clinical Registry'] = pnrp_key
-    if motor_key:
-        available_modules['Motor Function & Clinical Severity Evaluation Matrix'] = motor_key
-        
-    selected_display = st.sidebar.selectbox("Choose Disease or Lab Analysis Type", list(available_modules.keys()))
-    
-    # Extract the matching key from the array safely
-    internal_file_keys = available_modules[selected_display]
-    internal_file_key = internal_file_keys if isinstance(internal_file_keys, list) else internal_file_keys
-    
-    model_data = suite[internal_file_key]
-    features = model_data['features']
-    target = model_data['target']
-    mae = model_data['mae']
-    
-    # INTERACTIVE INFO EXPANDER
-    with st.expander(f"Show Module Description for: {selected_display}", expanded=True):
-        if "PRNP" in selected_display:
-            st.write(
-                "This diagnostic network evaluates verified human PRNP gene variations and genomic profiles. "
-                "It computes multi-parameter non-linear risk projections to determine relative pathogenicity "
-                "bounds mapped to structural structural mutations."
-            )
-        else:
-            st.write(
-                "This predictive module tracks physical motor control degradation, stability boundaries, and "
-                "biomechanical coordination vectors. It evaluates fine-motor velocity variations and tremor acceleration profiles "
-                "to determine overall functional progression markers."
-            )
-        
-    st.markdown("---")
-    friendly_target = parameter_dictionary.get(str(target).lower(), str(target).upper().replace('_', ' '))
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric(label="AI Clinical Prediction Goal", value=friendly_target)
-    col2.metric(label="Engine Validation Deviation (MAE)", value=f"{mae:.4f}")
-    col3.metric(label="Computational Architecture", value="XGBoost Ensemble")
-    
-    st.markdown("### Clinical Parameter & Feature Settings")
-    st.write("Modify the functional metrics below to evaluate real-time architectural estimations:")
-    
-    input_values = []
-    feature_labels = []
-    display_limit = min(12, len(features))
-    grid_cols = st.columns(2)
-    
-    for idx, feat in enumerate(features[:display_limit]):
-        col_slot = grid_cols[idx % 2]
-        clean_key = str(feat).lower().strip()
-        friendly_label = parameter_dictionary.get(clean_key, str(feat).replace('_', ' ').title())
-        
-        if len(friendly_label) > 60:
-            friendly_label = friendly_label[:57] + "..."
+            df = pd.read_csv(csv_file, encoding='utf-8-sig', low_memory=False)
+            df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('.', '')
             
-        if "PRNP" in selected_display:
-            choice = col_slot.selectbox(f"{friendly_label}", ["0 - Mutation Absent (Normal)", "1 - Mutation Present (Variant)"], index=0)
-            val = 1.0 if "1 -" in choice else 0.0
-        else:
-            val = col_slot.number_input(f"{friendly_label}", value=0.0, step=0.01, format="%.4f")
+            # --- MODEL MODULE A: PRNP GENETIC VARIANT ANALYSIS ---
+            if "variants" in fname or "prnp" in fname:
+                print(" -> Processing text parameters using categorical one-hot encoding matrices...")
+                
+                # Convert descriptive text columns into numeric matrices (0s and 1s)
+                categorical_cols = ['prnp_mutation', 'clinical_significance', 'condition', 'cdna_change']
+                existing_cats = [c for c in categorical_cols if c in df.columns]
+                
+                df_encoded = pd.get_dummies(df, columns=existing_cats, drop_first=False)
+                df_numeric = df_encoded.apply(pd.to_numeric, errors='coerce').dropna(how='all', axis=1)
+                
+                # Define target vector parameter
+                target_col = 'vcv000013401' if 'vcv000013401' in df_numeric.columns else df_numeric.columns[-1]
             
-        input_values.append(val)
-        feature_labels.append(friendly_label)
-        
-    for feat in features[display_limit:]:
-        input_values.append(0.0)
-        
-    st.markdown("---")
-    
-    if st.button("Compute Diagnostic Projection", type="primary"):
-        input_array = np.array([input_values])
-        prediction_raw = model_data['model'].predict(input_array)
-        
-        # FIXED: Robust parsing mechanism that works across all dimension types
-        if hasattr(prediction_raw, "item"):
-            prediction_scalar = float(prediction_raw.item())
-        else:
-            prediction_scalar = float(np.array(prediction_raw).flatten())
-        
-        st.success(f"### AI Predicted Outcome Value for [{friendly_target}]: **{prediction_scalar:.4f}**")
-        st.info(f"Cross-Validation Guidance Window: +/- {mae:.4f} deviation interval bounds.")
-        
-        # --- CLINICAL INTERPRETATION LAYER ---
-        st.markdown("### Clinical Interpretation of Results")
-        if "PRNP" in selected_display:
-            if prediction_scalar == 0.0:
-                st.write(
-                    "**Interpretation:** The AI engine has generated a baseline classification score. "
-                    "This indicates that the current combination of mutation vectors matches profiles with "
-                    "low localized structural disruption within the modeled genetic variants catalog."
-                )
+            # --- MODEL MODULE B: MOTOR REGISTRY ANALYSIS ---
             else:
-                st.write(
-                    "**Interpretation:** The AI engine indicates a non-zero variant risk probability tracking index. "
-                    "This implies structural deviations or alterations corresponding to known pathogenic genomic configurations."
-                )
-        else:
-            if prediction_scalar > 35000:
-                st.write(
-                    "**Interpretation:** **Advanced Functional Impairment Profile.** The combination of high physical tremors "
-                    "(Mean Jerk) and severe task velocity slowing places the computed score in the upper severity continuum. "
-                    "This profile correlates heavily with advanced neurodegenerative motor degradation markers."
-                )
-            else:
-                st.write(
-                    "**Interpretation:** **Early-Stage / Baseline Functional Profile.** The biomechanical parameters "
-                    "indicate relatively preserved fine-motor response coordinates or mild, localized resting tremor markers."
-                )
-
-        # --- MANDATORY MEDICAL DISCLAIMER BOX ---
-        st.warning(
-            "**IMPORTANT MEDICAL NOTICE & LEGAL DISCLAIMER:** "
-            "This application is a computational biology modeling research tool and is provided strictly for educational "
-            "and scientific simulation purposes. Results generated by this machine learning system are mathematical projections "
-            "based on historical training data sets and are **NOT guaranteed to be accurate, complete, or reflective of real-world "
-            "clinical conditions.** This tool does not provide medical diagnoses, treatment advice, or formal diagnostic evaluations. "
-            "All users must refer to a qualified medical professional, neurologist, or physician for any health concerns or "
-            "clinical decision-making guidance."
-        )
-
-        st.markdown("### Patient Benchmark Distribution Spectrum")
-        chart_data = pd.DataFrame(
-            [prediction_scalar, 16650.0, 35000.0],
-            index=['Current Profile Score', 'Normal Cohort Baseline Variance', 'Advanced Severity Threshold'],
-            columns=['Score Value']
-        )
-        st.bar_chart(chart_data)
-        
-        # --- GENERATE EXPORTABLE SUMMARY TEXT REPORT ---
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        report_text = f"""======================================================
-NEURODEGENERATIVE BIMODAL CLINICAL INTEL PROJECTION REPORT
-======================================================
-Generated Timestamp: {timestamp}
-Analysis Module Focus: {selected_display}
-Platform Authorship: Designed and Developed by Amara Ranjit Kamble
-
-RESULTS SUMMARY:
-------------------------------------------------------
-Target Variable Prediction Goal: {friendly_target}
-Calculated AI Inference Value  : {prediction_scalar:.4f}
-Cross-Validation Error Window  : +/- {mae:.4f} units
-
-MEDICAL DISCLAIMER:
-Projections are mathematical approximations from research registries and are not guaranteed to be clinically accurate. Refer to a medical professional.
-"""
-        for lbl, val in zip(feature_labels, input_values[:display_limit]):
-            report_text += f"- {lbl}: {val}\n"
-        report_text += "======================================================\n"
-
+                print(" -> Processing motor kinetics parameters...")
+                df_numeric = df.apply(pd.to_numeric, errors='coerce').dropna(how='all', axis=1)
+                target_col = 'total_time25' if 'total_time25' in df_numeric.columns else df_numeric.columns[-1]
+            
+            df_clean = df_numeric.dropna(how='all', axis=0)
+            
+            if df_clean.shape[0] < 5:
+                print(f"Warning: Skipping {fname}: Not enough dense rows to compute dependencies.")
+                continue
+                
+            feature_cols = [c for c in df_clean.columns if c != target_col]
+            
+            X = df_clean[feature_cols].fillna(0).to_numpy()
+            y = df_clean[target_col].fillna(df_clean[target_col].mean()).to_numpy()
+            
+            print(f"Extracted Matrix Shape: {X.shape[0]} samples, {X.shape[1]} clinical biological features.")
+            print(f"Target Prediction Variable: '{target_col}'")
+            
+            # Split: 80% to train structural connections, 20% to validate performance metrics
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            
+            # Train the ensemble decision network
+            ai_model = xgb.XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42)
+            ai_model.fit(X_train, y_train)
+            
+            # Cross-Validation Analysis
+            predictions = ai_model.predict(X_test)
+            mae = mean_absolute_error(y_test, predictions)
+            
+            try:
+                r2 = r2_score(y_test, predictions)
+                r2_str = f"{r2:.4f}"
+            except:
+                r2_str = "N/A (Validation variance too low)"
+            
+            print(f"\nEvaluation Metrics Summary for {fname}:")
+            print(f"   -> Mean Absolute Error (MAE): {mae:.4f}")
+            print(f"   -> R2 Architecture Performance Score: {r2_str}")
+            
+            # Save elements to model directory dictionary using unified clean strings
+            suite_key = 'real_prnp_variants_dataset.csv' if ("variants" in fname or "prnp" in fname) else 'data.csv'
+            model_suite[suite_key] = {
+                'model': ai_model,
+                'features': feature_cols,
+                'target': target_col,
+                'mae': float(mae)
+            }
+            
+        except Exception as e:
+            print(f"Error: Failed to parse file structures due to anomaly: {e}")
+            
+    # =====================================================================
+    # FREEZING THE DATA CORE
+    # =====================================================================
+    print(f"\n==================================================")
+    if len(model_suite) > 0:
+        # Save as standard backup asset and clear duplicate file variant
+        joblib.dump(model_suite, 'prion_clinical_suite.pkl')
+        joblib.dump(model_suite, 'prion_clinical_suite(2).pkl')
+        print(f"Success: Successfully trained Bimodal clinical network model variants.")
+        print(f"Diagnostic structures are unified and frozen into: 'prion_clinical_suite(2).pkl'")
