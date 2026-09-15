@@ -63,7 +63,9 @@ if suite:
         available_modules['Motor Function & Clinical Severity Evaluation Matrix'] = motor_key
         
     selected_display = st.sidebar.selectbox("Choose Disease or Lab Analysis Type", list(available_modules.keys()))
-    internal_file_key = available_modules[selected_display]
+    
+    # FIXED: Extracting the actual first string element out of the matching dictionary list structure safely
+    internal_file_key = available_modules[selected_display][0]
     
     model_data = suite[internal_file_key]
     features = model_data['features']
@@ -131,7 +133,7 @@ if suite:
         st.success(f"### AI Predicted Outcome Value for [{friendly_target}]: **{prediction_scalar:.4f}**")
         st.info(f"Cross-Validation Guidance Window: +/- {mae:.4f} deviation interval bounds.")
         
-        # --- NEW ADDON: CLINICAL INTERPRETATION LAYER ---
+        # --- CLINICAL INTERPRETATION LAYER ---
         st.markdown("### Clinical Interpretation of Results")
         if "PRNP" in selected_display:
             if prediction_scalar == 0.0:
@@ -206,5 +208,4 @@ Projections are mathematical approximations from research registries and are not
             mime="text/plain"
         )
 else:
-    st.warning("Failed to link model properties. Please check file integrity.")
 
